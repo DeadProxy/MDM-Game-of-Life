@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<!--
+ | HTML5 Implementation of John Conway's Game of Life for the MDM Greeter   
+ |
+ | Copyright (C)  2015 DeadProxy 
+ | 
+ | This program is free software: you can redistribute it and/or modify
+ | it under the terms of the GNU General Public License as published by
+ | the Free Software Foundation, either version 3 of the License, or
+ | (at your option) any later version.
+ | 
+ | This program is distributed in the hope that it will be useful,
+ | but WITHOUT ANY WARRANTY; without even the implied warranty of
+ | MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ | GNU General Public License for more details.
+ | 
+ | You should have received a copy of the GNU General Public License
+ | along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<html>
+	<head>
+		<link href="CSS/bootstrap.min.css" rel="stylesheet" type="text/css" />
+		<link href="CSS/GOL.css" rel="stylesheet" type="text/css" />
+
+		<script src="js/jquery-1.9.1.min.js"></script>
+	</head>
+	<body>
+
+		<script>
+		// Called by MDM to disable user input
+		function mdm_disable() {
+			document.getElementById("entry").value = "disabled";
+			document.getElementById("entry").disabled = "disabled";
+			document.getElementById("ok_button").disabled = "disabled";
+		}
+		
+		// Called by MDM to enable user input
+		function mdm_enable() {
+			document.getElementById("entry").value = "";
+			document.getElementById("entry").disabled = false;
+			document.getElementById("ok_button").disabled = false;
+		}
+		
+		// Called by MDM to set the welcome message
+		function set_welcome_message(message) {			
+			document.getElementById("welcome_message").innerHTML = message;
+		}
+		
+		// Called by MDM to update the clock
+		function set_clock(message) {			
+			document.getElementById("clock").innerHTML = message;
+		}
+		
+		// Called by MDM to allow the user to input a username		
+		function mdm_prompt(message) {	
+			mdm_enable();		
+			document.getElementById("label").innerHTML = message;
+			document.getElementById("entry").value = "";
+			document.getElementById("entry").type = "text";
+			document.getElementById("entry").focus();
+			selected_row = -1;
+		}
+		
+		// Called by MDM to allow the user to input a password
+		function mdm_noecho(message) {	
+			mdm_enable();		
+			document.getElementById("label").innerHTML = message;
+			document.getElementById("entry").value = "";
+			document.getElementById("entry").type = "password";
+			document.getElementById("entry").focus();
+		}
+		
+		// Called by MDM to show a message (usually "Please enter your username")
+		function mdm_msg(message) {			
+			document.getElementById("message").innerHTML = message;			
+		}
+
+		// Called by MDM to show an error		
+		function mdm_error(message) {						
+			if (message != "") {
+				document.getElementById("error").style.display = 'block';
+			}
+			else {
+				document.getElementById("error").style.display = 'none';
+			}
+			document.getElementById("error").innerHTML = message;
+		}	
+						
+		// Send user input to MDM
+		function send_login() {
+			// read the value before we disable the field, as it will be changed to "disabled"
+			var value = document.getElementById("entry").value;
+			mdm_disable();
+			alert("LOGIN###" + value);
+			return false;
+		}
+		
+		function init() {
+			document.getElementById("error").style.display = 'none';			
+			document.getElementById("timed").style.display = 'none';			
+			document.getElementById("current_session_picture").width = 16;				
+		}
+
+		// Called by MDM to add a session to the list of sessions
+		function mdm_add_session(session_name, session_file) {
+			
+			session_name = session_name.replace("Ubuntu", "Unity");
+			
+			var filename = session_file.toLowerCase();
+			filename = filename.replace(/ /g, "-");
+			filename = filename.replace(/\(/g, "");
+			filename = filename.replace(/\)/g, "");
+			filename = filename.replace(/.desktop/g, "");
+													
+			var link1 = document.createElement('a');	
+				link1.setAttribute('href', "javascript:alert('SESSION###"+session_name+"###"+session_file+"');mdm_set_current_session('"+session_name+"','"+session_file+"');");
+
+			var link2 = document.createElement('a');	
+				link2.setAttribute('href', "javascript:alert('SESSION###"+session_name+"###"+session_file+"');mdm_set_current_session('"+session_name+"','"+session_file+"');");
+				
+			var picture = document.createElement('img');
+				picture.setAttribute('class', "session-picture");
+				picture.setAttribute('src', "../common/img/sessions/"+filename+".svg");
+				picture.setAttribute('onerror', "this.src='../common/img/sessions/default.svg';");
+							
+			var name_div = document.createTextNode(session_name);				
+																																			
+			link1.appendChild(picture);
+			link2.appendChild(name_div);
+				
+			var table = document.getElementById("sessions");
+ 
+            var rowCount = table.rows.length;
+            var row = table.insertRow(rowCount);
+ 
+            var cell1 = row.insertCell(0); 
+            cell1.width = "28px";          
+            cell1.appendChild(link1);
+          
+            var cell2 = row.insertCell(1);           
+            cell2.appendChild(link2);
+		}			
+
+		function mdm_set_current_session(session_name, session_file) {
+			var filename = session_file.toLowerCase();
+			filename = filename.replace(/ /g, "-");
+			filename = filename.replace(/\(/g, "");
+			filename = filename.replace(/\)/g, "");
+			filename = filename.replace(/.desktop/g, "");
+			document.getElementById("current_session_picture").src = "../common/img/sessions/"+filename+".svg";
+			document.getElementById("current_session_picture").title = session_name;
+			document.getElementById("current_session_picture").width = 16;
+			$('#sessionSelection').modal('hide');
+		}
+
+		function mdm_set_current_user(username)	{			
+			var table = document.getElementById("users");
+			var rowCount = table.rows.length;			
+			for (var i = 0, row; row = table.rows[i]; i++) {
+				if (row.username == username) {
+					row.setAttribute('class', "selected-user");
+					selected_row = i;
+				}
+				else {
+					row.setAttribute('class', "normal-user");
+				}
+			}			
+		}		
+
+		function select_user_at_index(index) {					
+			var table = document.getElementById("users");
+			var rowCount = table.rows.length;
+			var row_to_select = index % rowCount;
+			if (row_to_select < 0) {
+				row_to_select = rowCount - 1;
+			}			
+			var row = table.rows[row_to_select];
+			selected_row = row_to_select;
+			alert('USER###'+row.username);
+		}	
+		
+		// Called by MDM if the SHUTDOWN command shouldn't appear in the greeter
+		function mdm_hide_shutdown() {
+			document.getElementById("shutdown").style.display = 'none';
+		}	
+		
+		// Called by MDM if the SUSPEND command shouldn't appear in the greeter
+		function mdm_hide_suspend() {
+			document.getElementById("suspend").style.display = 'none';
+		}
+		
+		// Called by MDM if the RESTART command shouldn't appear in the greeter
+		function mdm_hide_restart() {
+			document.getElementById("restart").style.display = 'none';
+		}
+		
+		// Called by MDM if the QUIT command shouldn't appear in the greeter
+		function mdm_hide_quit() {
+			document.getElementById("quit").style.display = 'none';
+		}
+		
+		// Called by MDM if the XDMCP command shouldn't appear in the greeter
+		function mdm_hide_xdmcp() {
+			document.getElementById("xdmcp").style.display = 'none';
+		}				
+
+		</script>
+
+		<div>
+			<a class="btn btn-small" href="#" onClick="alert('SHUTDOWN###');" title="$quit" id="shutdown"><class="icon-off"><span class="glyphicon glyphicon-off"></span></a>
+
+			<h1 id="welcome_message"></h1>	
+			<p id="clock"></p>
+			<p id="error"></p>
+
+			<form class="form-inline" onSubmit="return send_login();">
+				<fieldset>			
+					<label id="label"></label>
+					<input type="text" class="input-medium mousetrap" id="entry">
+					<button type="submit" class="btn-small btninverse" id="ok_button">$ok_label</button>
+				</fieldset>
+			</form>
+		</div>
+
+		<!-- The Game is drawn here -->
+		<canvas id="game">Browser Does Not support Canvas Element</canvas>
+
+		<script>
+			// stores the first element that matches tag
+			var tempDiv = $(document.getElementsByTagName('div')[0]).innerHeight();
+			// subtract tempDiv from the game Height if the div container isn't working correctly
+
+			// runTime stores the total number of 
+			// times the Grid has been drawn to the
+			// screen	
+			var runTime = 0;	
+
+			// Tweak to suit your preferences
+			var properties = {
+				// Editable
+				tileCols: 100, // x
+				tileRows: 100, // y
+				tilePadding: 1, 
+
+				// Colours
+				tileDead: "#000000",
+				tileLive: "#FF0000",
+
+				// Do not edit
+				gameWidth: window.outerWidth - 25,  // x
+				gameHeight: window.outerHeight,  // y
+				tileWidth: 0,
+				tileHeight: 0,
+
+				// Screen Refresh Rate in Seconds
+				// 1sec = 1000
+				gameRefreshRate: 100 
+			};
+			
+			// Set the size of the Canvas 
+			// This is where the game is run
+			var canvas = document.getElementById("game");
+			canvas.width = properties.gameWidth;
+			canvas.height = properties.gameHeight;
+			
+			// Required for drawing objects within the Canvas
+			var ctx = canvas.getContext("2d");
+
+			// determine the dimensions of each tile	
+			properties.tileWidth = ( Math.round( properties.gameWidth / properties.tileCols ) );
+			properties.tileHeight = ( Math.round( properties.gameHeight / properties.tileRows ) );
+	
+			// Tile object
+			var tile = {
+
+				// Dead = 0
+				// Live = 1
+				state: 0,
+				
+				// how long the tile has remained alive 
+				generation: 0, 
+				
+				// return a new tile	
+				construct: function(state) {
+					this.state = state;
+					return this;
+				}
+			};			
+			
+			// initialise grids as multidimensional arrays containing tiles
+			var grid = new Array();
+			var tempGrid = new Array();
+			constructGrid(grid, tempGrid);
+	
+			// Creates an infinite loop that updates the grid
+			// at set intervals (time)
+			setInterval(function() {
+				drawGrid();
+				evaluateGrid();	
+				runTime++;
+			}, properties.gameRefreshRate);
+
+			// Functions
+			// Draws the entire Grid to the screen
+			function drawGrid() 
+			{
+				// Draw the grid out to the screen
+				for( i = 0; i < properties.tileRows; i++ )
+				{
+					for( j = 0; j < properties.tileCols; j++ )
+					{
+						if( grid[i][j].state )
+						{
+							// Draw live
+							ctx.fillStyle = properties.tileLive;
+
+						} else {
+							// Draw Dead
+							ctx.fillStyle = properties.tileDead;
+						}		
+
+						ctx.fillRect (
+							(j * properties.tileWidth),
+							(i * properties.tileHeight),
+							(properties.tileWidth - properties.tilePadding),
+							(properties.tileHeight - properties.tilePadding)
+						);
+					}
+				}
+			}
+			
+			
+			// Initialises a multidimensional array containing tiles
+			function constructGrid(grid, tempGrid) 
+			{
+				// Construct a multidimensional grid
+				for( i = 0; i < properties.tileRows; i++ )
+				{
+					grid[i] = new Array(); // construct an array within an array
+					tempGrid[i] = new Array();
+				
+					for( j = 0; j < properties.tileCols; j++ )
+					{
+						// Construct a grid with randomised Tiles
+						grid[i][j] = new tile.construct(Math.floor((Math.random() * 2)));
+						// Construct a dead grid
+						tempGrid[i][j] = new tile.construct(0);
+					}
+				}	
+			}
+
+			// Scans through each element in the current Grid
+			// applying any changes to the tempGrid
+			// once all elements have been scanned tempGrid is
+			// copied into grid
+			function evaluateGrid()
+			{
+				var neighbours = 0;
+
+				// Scan through each element in The Grid
+				for( i = 0; i < properties.tileRows; i++ )
+				{
+					for( j = 0; j < properties.tileCols; j++ )
+					{
+						// Determine the number of Neighbours
+						neighbours = determineNeighbours( i, j );
+
+						// if tile has three neighbours then birth 
+						if ( neighbours == 3 )
+						{
+							tempGrid[i][j].state = 1;
+						}
+						// if tile has < 2 neighbours then death
+						// if tile has > 3 neighbours then death
+						else if ( (neighbours < 2) || (neighbours > 3) )
+						{
+							tempGrid[i][j].state = 0;
+						} 
+						// if tile has 2 || 3 neighbours then survive 
+						// or if none of the rules apply
+						else
+						{
+							tempGrid[i][j].state = grid[i][j].state;
+						}
+					}
+				}	
+			
+				// ensures that copy by value is done only on a single integer
+				// rather than the whole object
+				for( i = 0; i < properties.tileRows; i++ )
+				{
+					for( j = 0; j < properties.tileCols; j++ )
+					{
+						grid[i][j].state = tempGrid[i][j].state;	
+					}
+				}	
+			}
+
+			
+			// Determines the number of neighbours that a tile has
+			function determineNeighbours( x, y )
+			{
+				var count = 0;
+				var tempx;
+				var tempy;
+				
+				for( z = -1; z < 2; z++ )
+				{
+					tempx = x + z;
+
+					if( (tempx > -1) && (tempx < properties.tileCols))
+					{
+						for( e = -1; e < 2; e++ )
+						{
+							tempy = y + e;
+
+							if( (tempy > -1) && (tempy < properties.tileRows))
+							{
+								if( !((tempx == x) && (tempy == y)))
+								{
+									if(grid[tempx][tempy].state)
+									{
+										count++;
+									}
+								}
+							}
+						}
+					}
+				}
+				
+				return count;
+			}
+			
+
+		</script>
+	</body>
+</html>
